@@ -1,9 +1,10 @@
 # install.packages("BiocManager")
 ## BiocManager::install(c("scRNAseq", "scater", "scran", "uwot"), dependencies=TRUE)  # "TENxPBMCData"
 ## BiocManager::install("DropletUtils")
-library(DropletUtils, warn.conflicts=F)
-library(scater, warn.conflicts=F)
-library(scran, warn.conflicts=F)
+library(DropletUtils, warn.conflicts=F, quietly=T)
+library(scater, warn.conflicts=F, quietly=T)
+library(scran, warn.conflicts=F, quietly=T)
+library(pheatmap, warn.conflicts=F, quietly=T)
 sce <- read10xCounts("/fh/fast/matsen_e/data/goo-dengue-10x/data/gex/filtered_feature_bc_matrix")
 rownames(sce) <- uniquifyFeatureNames(rowData(sce)$ID, rowData(sce)$Symbol)
 
@@ -33,17 +34,20 @@ sce <- runUMAP(sce, dimred = 'PCA', external_neighbors=TRUE)  # uses pca results
 g <- buildSNNGraph(sce, use.dimred = 'PCA')
 colLabels(sce) <- factor(igraph::cluster_louvain(g)$membership)
 
-png("~/Dropbox/tmp-plots/clusters.png")
+pdf("~/Dropbox/tmp-plots/clusters.pdf")
 plotUMAP(sce, colour_by="label")
 dev.off()
 
 # find marker genes
 markers <- findMarkers(sce)  # list of data frames for each cluster
-chosen <- "1"  # look at genes that distinguish cluster 1 from all other clusters
-interesting <- markers[[chosen]]
-best.set <- interesting[interesting$Top <= 6,]  # look at the top 6 genes from each pairwise comparison
-logFCs <- getMarkerEffects(best.set)
-library(pheatmap, warn.conflicts=F)
-png("~/Dropbox/tmp-plots/heatmap.png")
-pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
-dev.off()
+n.genes = 3
+print(sprintf("  top %d genes for each cluster (total size %d)", n.genes, length(sce$label)))
+for(ich in seq(length(markers))) {  # look at genes that distinguish cluster ich from all other clusters
+    print(sprintf("   cluster %2d  size %4d  frac %.2f", ich, sum(sce$label==ich), sum(sce$label==ich) / length(sce$label)))
+    interesting <- markers[[ich]]
+    best.set <- interesting[interesting$Top <= n.genes,]  # look at the top N genes from each pairwise comparison
+    logFCs <- getMarkerEffects(best.set)
+    png(sprintf("~/Dropbox/tmp-plots/heatmap-%d.png", ich))
+    pheatmap(logFCs, breaks=seq(-5, 5, length.out=101))
+    dev.off()
+}
